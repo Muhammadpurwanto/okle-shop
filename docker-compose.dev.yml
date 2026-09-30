@@ -1,0 +1,91 @@
+version: '3.8'
+
+services:
+  # =============================================================
+  # 1. Database MySQL 8.0
+  # =============================================================
+  mysql_db:
+    image: mysql:8.0
+    container_name: okle_mysql_dev
+    restart: unless-stopped
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "${DB_PORT}:3306"
+    volumes:
+      - okle_mysql_data:/var/lib/mysql
+      - ./backend/migrations/000001_init_schema.up.sql:/docker-entrypoint-initdb.d/01_init_schema.sql:ro
+    networks:
+      - okle_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # =============================================================
+  # 2. Backend Golang Fiber (dengan Air Hot-Reload)
+  # =============================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: okle_backend_dev
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    environment:
+      APP_PORT: 8000
+      # Perhatikan: Host database menggunakan nama service 'mysql_db', bukan localhost!
+      DB_HOST: mysql_db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      APP_ENV: development
+    volumes:
+      - ./backend:/app
+    networks:
+      - okle_network
+    depends_on:
+      mysql_db:
+        condition: service_healthy
+
+  # =============================================================
+  # 3. Frontend React Vite (dengan Tailwind & HMR)
+  # =============================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: okle_frontend_dev
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules # Lindungi dependensi Linux dari tindihan Windows
+    networks:
+      - okle_network
+    depends_on:
+      - backend
+
+# ===============================================================
+# Persistent Volumes & Network Definitions
+# ===============================================================
+volumes:
+  okle_mysql_data:
+    name: okle_mysql_data_dev
+
+networks:
+  okle_network:
+    name: okle_dev_network
+    driver: bridge

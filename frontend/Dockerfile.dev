@@ -1,0 +1,16 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Salin package.json terlebih dahulu untuk efisiensi Docker cache
+COPY package.json package-lock.json ./
+RUN npm install
+
+# Salin seluruh kode frontend
+COPY . .
+
+# Expose port dev Vite
+EXPOSE 5173
+
+# Jalankan Vite server dengan binding host 0.0.0.0 agar bisa diakses dari host
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

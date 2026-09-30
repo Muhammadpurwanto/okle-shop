@@ -1,0 +1,22 @@
+FROM golang:1.26-alpine
+
+# Install git dan dependensi dasar untuk build
+RUN apk add --no-cache git gcc musl-dev
+
+# Install live-reload utility "Air"
+RUN go install github.com/air-verse/air@latest
+
+WORKDIR /app
+
+# Copy dependensi module terlebih dahulu agar dicache Docker
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Salin seluruh source code
+COPY . .
+
+# Expose port API backend
+EXPOSE 8000
+
+# Jalankan Air saat container menyala
+CMD ["air", "-c", ".air.toml"]
